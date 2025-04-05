@@ -1,9 +1,10 @@
 import itertools
 import os
 from datetime import datetime
+from typing import Iterable
 
 from playwright.sync_api import Locator, Page, sync_playwright
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 FOODCOOP_USERNAME = os.getenv("FOODCOOP_USERNAME")
 FOODCOOP_PASSWORD = os.getenv("FOODCOOP_PASSWORD")
@@ -16,38 +17,40 @@ FOODCOOP_LOGIN_URL = "https://members.foodcoop.com/services/login/"
 FOODCOOP_SHIFT_CALENDAR_URL = "https://members.foodcoop.com/services/shifts/"
 
 
-class FoodCoopShift(BaseModel):
+class FoodCoopShiftKey(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     start_time: datetime
-    url: str
     label: str
+
+
+class FoodCoopShift(BaseModel):
+    key: FoodCoopShiftKey
+    urls: list[str] = Field(default_factory=list)
 
 
 def parse_shifts_from_calendar_date_locator(
     shift_day: Locator,
-) -> list[FoodCoopShift]:
+) -> Iterable[FoodCoopShift]:
     date_element = shift_day.locator("p b").first
     _, date = date_element.inner_text().strip().split()
 
-    shifts = []
+    shifts_for_key: dict[FoodCoopShiftKey, FoodCoopShift] = {}
     for shift in shift_day.locator("a.shift").all():
         url = shift.get_attribute("href")
         assert url, "Shift url is missing"
 
         start_time = shift.locator("b").inner_text()
-
         _, label = shift.inner_text().strip().split(maxsplit=1)
 
-        shifts.append(
-            FoodCoopShift(
-                start_time=datetime.strptime(
-                    f"{date} {start_time}", "%m/%d/%Y %I:%M%p"
-                ),
-                url=url.strip(),
-                label=label,
-            )
+        key = FoodCoopShiftKey(
+            start_time=datetime.strptime(f"{date} {start_time}", "%m/%d/%Y %I:%M%p"),
+            label=label,
         )
 
-    return shifts
+        shifts_for_key.setdefault(key, FoodCoopShift(key=key)).urls.append(url.strip())
+
+    return shifts_for_key.values()
 
 
 def parse_shifts_from_calendar_page(page: Page) -> list[FoodCoopShift]:
@@ -83,6 +86,7 @@ def main():
         # Go to the shift calendar
         page.goto(FOODCOOP_SHIFT_CALENDAR_URL)
 
+        # Parse shifts from the calendar page
         _shifts = parse_shifts_from_calendar_page(page)
 
         browser.close()
