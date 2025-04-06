@@ -18,6 +18,17 @@ FOODCOOP_LOGIN_URL = "https://members.foodcoop.com/services/login/"
 FOODCOOP_SHIFT_CALENDAR_URL = "https://members.foodcoop.com/services/shifts/"
 
 
+def authenticate_into_foodcoop(page: Page):
+    assert FOODCOOP_USERNAME, "FOODCOOP_USERNAME is not set"
+    assert FOODCOOP_PASSWORD, "FOODCOOP_PASSWORD is not set"
+
+    page.goto(FOODCOOP_LOGIN_URL)
+
+    page.get_by_role("textbox", name=FOODCOOP_USERNAME_INPUT).fill(FOODCOOP_USERNAME)
+    page.get_by_role("textbox", name=FOODCOOP_PASSWORD_INPUT).fill(FOODCOOP_PASSWORD)
+    page.get_by_role("button", name=FOODCOOP_LOGIN_BUTTON).click()
+
+
 class FoodCoopShiftKey(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -73,28 +84,14 @@ def parse_shifts_from_calendar_page(page: Page) -> list[FoodCoopShift]:
 
 
 def main():
-    assert FOODCOOP_USERNAME, "FOODCOOP_USERNAME is not set"
-    assert FOODCOOP_PASSWORD, "FOODCOOP_PASSWORD is not set"
-
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
 
-        # Login to the coop
-        page.goto(FOODCOOP_LOGIN_URL)
+        authenticate_into_foodcoop(page)
 
-        page.get_by_role("textbox", name=FOODCOOP_USERNAME_INPUT).fill(
-            FOODCOOP_USERNAME
-        )
-        page.get_by_role("textbox", name=FOODCOOP_PASSWORD_INPUT).fill(
-            FOODCOOP_PASSWORD
-        )
-        page.get_by_role("button", name=FOODCOOP_LOGIN_BUTTON).click()
-
-        # Go to the shift calendar
         page.goto(FOODCOOP_SHIFT_CALENDAR_URL)
 
-        # Parse shifts from the calendar page
         _shifts = parse_shifts_from_calendar_page(page)
 
         browser.close()
