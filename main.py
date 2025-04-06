@@ -20,7 +20,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON_PATH = (
 )
 
 FOODCOOP_SHIFT_LENGTH = timedelta(hours=2, minutes=45)
-FOODCOOP_NUM_CALENDAR_SHIFT_PAGES = 6
+FOODCOOP_NUM_SHIFT_CALENDAR_PAGES = 6
 
 FOODCOOP_USERNAME = os.getenv("FOODCOOP_USERNAME")
 FOODCOOP_PASSWORD = os.getenv("FOODCOOP_PASSWORD")
@@ -64,12 +64,14 @@ class FoodCoopShift(BaseModel):
     urls: list[str] = Field(default_factory=list)
 
 
-def get_calendar_page_urls():
+def get_calendar_page_urls(
+    num_pages: int = FOODCOOP_NUM_SHIFT_CALENDAR_PAGES,
+) -> list[str]:
     today = datetime.now()
 
     return [
         f"{FOODCOOP_SHIFT_CALENDAR_URL}{shift_page}/0/0/{today.strftime('%Y-%m-%d')}/"
-        for shift_page in range(FOODCOOP_NUM_CALENDAR_SHIFT_PAGES)
+        for shift_page in range(num_pages)
     ]
 
 
@@ -122,13 +124,11 @@ async def parse_shifts_from_calendar_page(
 async def parse_shifts_from_calendar(
     browser_context: BrowserContext,
 ) -> list[FoodCoopShift]:
-    shift_calendar_urls = get_calendar_page_urls()
     shifts = []
-
     async for task in asyncio.as_completed(
         [
             parse_shifts_from_calendar_page(browser_context, url)
-            for url in shift_calendar_urls
+            for url in get_calendar_page_urls(num_pages=3)
         ]
     ):
         shifts.extend(await task)
