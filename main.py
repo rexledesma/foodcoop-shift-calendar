@@ -12,6 +12,7 @@ FOODCOOP_PASSWORD = os.getenv("FOODCOOP_PASSWORD")
 FOODCOOP_USERNAME_INPUT = "Member Number or Email"
 FOODCOOP_PASSWORD_INPUT = "Password"
 FOODCOOP_LOGIN_BUTTON = "Log In"
+FOODCOOP_NEXT_WEEK_BUTTON = "Next Week →"
 
 FOODCOOP_LOGIN_URL = "https://members.foodcoop.com/services/login/"
 FOODCOOP_SHIFT_CALENDAR_URL = "https://members.foodcoop.com/services/shifts/"
@@ -56,12 +57,19 @@ def parse_shifts_from_calendar_date_locator(
 def parse_shifts_from_calendar_page(page: Page) -> list[FoodCoopShift]:
     shift_day_locators = page.locator(".grid-container div.col").all()
 
-    return list(
-        itertools.chain.from_iterable(
-            parse_shifts_from_calendar_date_locator(shift_day)
-            for shift_day in shift_day_locators
-        )
+    shifts = itertools.chain.from_iterable(
+        parse_shifts_from_calendar_date_locator(shift_day)
+        for shift_day in shift_day_locators
     )
+
+    next_week_locator = page.get_by_role("link", name="Next Week →").first
+    if next_week_locator.is_visible():
+        with page.expect_navigation():
+            next_week_locator.click()
+
+        shifts = itertools.chain(shifts, parse_shifts_from_calendar_page(page))
+
+    return list(shifts)
 
 
 def main():
