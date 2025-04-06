@@ -2,14 +2,15 @@ import asyncio
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, cast
+from zoneinfo import ZoneInfo
 
 import uvloop
 from gcsa.event import Event
 from gcsa.google_calendar import GoogleCalendar
 from google.oauth2 import service_account
 from playwright.async_api import BrowserContext, Locator, async_playwright
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID = "9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462@group.calendar.google.com"
 GOOGLE_FOODCOOP_LOCATION = "Park Slope Food Coop"
@@ -61,7 +62,26 @@ class FoodCoopShiftKey(BaseModel):
 
 class FoodCoopShift(BaseModel):
     key: FoodCoopShiftKey
-    urls: list[str] = Field(default_factory=list)
+    urls: frozenset[str]
+
+    @staticmethod
+    def from_event(event: Event) -> "FoodCoopShift":
+        start_time = cast(datetime, event.start)
+        label = cast(str, event.summary)
+        description = cast(str, event.description)
+
+        urls = [
+            line.strip().lstrip("<li>").rstrip("</li>")
+            for line in description.splitlines()
+            if line.strip().startswith("<li>")
+        ]
+
+        shift = FoodCoopShift(
+            key=FoodCoopShiftKey(start_time=start_time, label=label),
+            urls=frozenset(urls),
+        )
+
+        return shift
 
 
 def get_calendar_page_urls(
@@ -81,23 +101,28 @@ async def parse_shifts_from_calendar_date_locator(
     date_element = shift_day.locator("p b").first
     _, date = (await date_element.inner_text()).strip().split()
 
-    shifts_for_key: dict[FoodCoopShiftKey, FoodCoopShift] = {}
+    shifts_for_key: dict[FoodCoopShiftKey, list[str]] = {}
     for shift in await shift_day.locator("a.shift").all():
         url = await shift.get_attribute("href")
         assert url, "Shift url is missing"
-        url = f"{FOODCOOP_URL}{url.strip()}"
+        url = f"{FOODCOOP_URL}{url.strip().rstrip('/')}"
 
         start_time = await shift.locator("b").inner_text()
         _, label = (await shift.inner_text()).strip().lstrip("🥕").split(maxsplit=1)
 
-        key = FoodCoopShiftKey(
-            start_time=datetime.strptime(f"{date} {start_time}", "%m/%d/%Y %I:%M%p"),
-            label=label,
-        )
+        start_time = datetime.strptime(f"{date} {start_time}", "%m/%d/%Y %I:%M%p")
+        start_time = start_time.replace(tzinfo=ZoneInfo("US/Eastern"))
 
-        shifts_for_key.setdefault(key, FoodCoopShift(key=key)).urls.append(url)
+        key = FoodCoopShiftKey(start_time=start_time, label=label)
 
-    return shifts_for_key.values()
+        shifts_for_key.setdefault(key, []).append(url)
+
+    shifts = [
+        FoodCoopShift(key=key, urls=frozenset(urls))
+        for key, urls in shifts_for_key.items()
+    ]
+
+    return shifts
 
 
 async def parse_shifts_from_calendar_page(
@@ -136,7 +161,26 @@ async def parse_shifts_from_calendar(
     return shifts
 
 
-def sync_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
+def create_event_from_shift(
+    shift: FoodCoopShift,
+) -> Event:
+    return Event(
+        summary=shift.key.label,
+        start=shift.key.start_time,
+        end=shift.key.start_time + FOODCOOP_SHIFT_LENGTH,
+        description="\n".join(
+            [
+                f"{len(shift.urls)} shift(s) available for {shift.key.label}:",
+                "<ul>",
+                *(f"<li>{url}</li>" for url in shift.urls),
+                "</ul>",
+            ]
+        ),
+        location=GOOGLE_FOODCOOP_LOCATION,
+    )
+
+
+def reconcile_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
     foodcoop_shift_calendar = GoogleCalendar(
         default_calendar=GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID,
         credentials=service_account.Credentials.from_service_account_file(
@@ -145,28 +189,54 @@ def sync_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
         ),  # type: ignore
     )
 
-    # Delete existing shifts on calendar before syncing
+    existing_shifts_for_key: dict[FoodCoopShiftKey, tuple[FoodCoopShift, Event]] = {}
     for event in foodcoop_shift_calendar.get_events():
+        existing_shift = FoodCoopShift.from_event(event)
+
+        if existing_shift.key in existing_shifts_for_key:
+            foodcoop_shift_calendar.delete_event(event)
+        else:
+            existing_shifts_for_key[existing_shift.key] = (existing_shift, event)
+
+    parsed_shifts_for_key = {shift.key: shift for shift in shifts}
+
+    print(f"Found {len(existing_shifts_for_key)} shifts in calendar.")
+    print(f"Found {len(parsed_shifts_for_key)} shifts in parsed calendar.")
+
+    # Add shifts that don't exist in the calendar
+    shifts_to_add = [
+        shift for shift in shifts if shift.key not in existing_shifts_for_key
+    ]
+
+    print(f"Adding {len(shifts_to_add)} shifts to calendar.")
+    for shift in shifts_to_add:
+        foodcoop_shift_calendar.add_event(create_event_from_shift(shift))
+
+    # Remove shifts that no longer exist
+    events_to_remove = [
+        event
+        for (shift, event) in existing_shifts_for_key.values()
+        if shift.key not in parsed_shifts_for_key
+    ]
+
+    print(f"Removing {len(events_to_remove)} shifts to calendar.")
+    for event in events_to_remove:
         foodcoop_shift_calendar.delete_event(event)
 
-    # Sync shifts to calendar
-    for shift in shifts:
-        foodcoop_shift_calendar.add_event(
-            event=Event(
-                summary=shift.key.label,
-                start=shift.key.start_time,
-                end=shift.key.start_time + FOODCOOP_SHIFT_LENGTH,
-                description="\n".join(
-                    [
-                        f"{len(shift.urls)} shift(s) available for {shift.key.label}:",
-                        "<ul>",
-                        *(f"<li>{url}</li>" for url in shift.urls),
-                        "</ul>",
-                    ]
-                ),
-                location=GOOGLE_FOODCOOP_LOCATION,
-            )
-        )
+    # Update shifts that have changed
+    shifts_to_update = [
+        (shift, event)
+        for (shift, event) in existing_shifts_for_key.values()
+        if shift.key in parsed_shifts_for_key
+        and shift.urls != parsed_shifts_for_key[shift.key].urls
+    ]
+
+    print(f"Updating {len(shifts_to_update)} shifts to calendar.")
+    for shift, event in shifts_to_update:
+        event.description = create_event_from_shift(shift).description
+        foodcoop_shift_calendar.update_event(event)
+
+    print("Reconciled shifts to calendar.")
 
 
 async def main():
@@ -180,7 +250,7 @@ async def main():
 
         await browser.close()
 
-    sync_shifts_to_google_calendar(shifts)
+    reconcile_shifts_to_google_calendar(shifts)
 
 
 if __name__ == "__main__":
