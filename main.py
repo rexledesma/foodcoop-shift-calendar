@@ -14,12 +14,11 @@ from pydantic import BaseModel, ConfigDict
 
 GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID = "9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462@group.calendar.google.com"
 GOOGLE_FOODCOOP_LOCATION = "Park Slope Food Coop"
-GOOGLE_SERVICE_ACCOUNT_JSON_PATH = (
-    Path.home()
-    .joinpath("Downloads", "park-slope-food-coop-7ef1097a9bc5.json")
-    .as_posix()
+GOOGLE_SERVICE_ACCOUNT_JSON_PATH = Path.home().joinpath(
+    "Downloads", "park-slope-food-coop-7ef1097a9bc5.json"
 )
-
+if os.getenv("RENDER"):
+    GOOGLE_SERVICE_ACCOUNT_JSON_PATH = Path("/", "etc", "secrets", "credentials.json")
 FOODCOOP_SHIFT_LENGTH = timedelta(hours=2, minutes=45)
 FOODCOOP_NUM_SHIFT_CALENDAR_PAGES = 3
 
