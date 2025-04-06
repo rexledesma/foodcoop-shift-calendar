@@ -6,19 +6,19 @@ from typing import Iterable, cast
 from zoneinfo import ZoneInfo
 
 import uvloop
+from dotenv import load_dotenv
 from gcsa.event import Event
 from gcsa.google_calendar import GoogleCalendar
 from google.oauth2 import service_account
 from playwright.async_api import BrowserContext, Locator, async_playwright
 from pydantic import BaseModel, ConfigDict
 
+load_dotenv()
+
 GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID = "9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462@group.calendar.google.com"
 GOOGLE_FOODCOOP_LOCATION = "Park Slope Food Coop"
-GOOGLE_SERVICE_ACCOUNT_JSON_PATH = Path.home().joinpath(
-    "Downloads", "park-slope-food-coop-7ef1097a9bc5.json"
-)
-if os.getenv("RENDER"):
-    GOOGLE_SERVICE_ACCOUNT_JSON_PATH = Path("/", "etc", "secrets", "credentials.json")
+GOOGLE_SERVICE_ACCOUNT_JSON_PATH = Path("credentials.json")
+
 FOODCOOP_SHIFT_LENGTH = timedelta(hours=2, minutes=45)
 FOODCOOP_NUM_SHIFT_CALENDAR_PAGES = 3
 
@@ -137,7 +137,7 @@ async def parse_shifts_from_calendar_page(
     await page.goto(url)
 
     shifts = []
-    async for task in asyncio.as_completed(
+    for task in asyncio.as_completed(
         [
             parse_shifts_from_calendar_date_locator(shift_day_locator)
             for shift_day_locator in (
@@ -154,7 +154,7 @@ async def parse_shifts_from_calendar(
     browser_context: BrowserContext,
 ) -> list[FoodCoopShift]:
     shifts = []
-    async for task in asyncio.as_completed(
+    for task in asyncio.as_completed(
         [
             parse_shifts_from_calendar_page(browser_context, url)
             for url in get_calendar_page_urls()

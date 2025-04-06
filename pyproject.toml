@@ -8,5 +8,6 @@ dependencies = [
     "gcsa>=2.5.1",
     "playwright>=1.51.0",
     "pydantic>=2.11.2",
+    "python-dotenv>=1.1.0",
     "uvloop>=0.21.0",
 ]
