@@ -1,5 +1,6 @@
 import asyncio
 import os
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, cast
@@ -242,10 +243,11 @@ def reconcile_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
         event.description = create_event_from_shift(shift).description
         foodcoop_shift_calendar.update_event(event)
 
-    print("Reconciled shifts to calendar.")
-
 
 async def main():
+    start_time = time.time()
+
+    print("Parsing shifts from foodcoop calendar...")
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         browser_context = await browser.new_context()
@@ -256,7 +258,17 @@ async def main():
 
         await browser.close()
 
+    print(f"Parsed {len(shifts)} shifts in {time.time() - start_time:.2f} seconds.")
+
+    start_time = time.time()
+
+    print("Reconciling shifts to Google Calendar...")
+
     reconcile_shifts_to_google_calendar(shifts)
+
+    print(
+        f"Finished reconciling shifts to calendar in {time.time() - start_time:.2f} seconds."
+    )
 
 
 if __name__ == "__main__":
