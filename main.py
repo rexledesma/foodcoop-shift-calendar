@@ -102,7 +102,7 @@ async def parse_shifts_from_calendar_date_locator(
     _, date = (await date_element.inner_text()).strip().split()
 
     shifts_for_key: dict[FoodCoopShiftKey, list[str]] = {}
-    for shift in await shift_day.locator("a.shift").all():
+    for shift in await shift_day.locator("a.shift:not(.my_shift)").all():
         url = await shift.get_attribute("href")
         assert url, "Shift url is missing"
         url = f"{FOODCOOP_URL}{url.strip().rstrip('/')}"
