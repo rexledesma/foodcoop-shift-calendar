@@ -1,10 +1,24 @@
 import itertools
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Iterable
 
+from gcsa.event import Event
+from gcsa.google_calendar import GoogleCalendar
+from google.oauth2 import service_account
 from playwright.sync_api import Locator, Page, sync_playwright
 from pydantic import BaseModel, ConfigDict, Field
+
+GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID = "9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462@group.calendar.google.com"
+GOOGLE_FOODCOOP_LOCATION = "Park Slope Food Coop"
+GOOGLE_SERVICE_ACCOUNT_JSON_PATH = (
+    Path.home()
+    .joinpath("Downloads", "park-slope-food-coop-7ef1097a9bc5.json")
+    .as_posix()
+)
+
+FOODCOOP_SHIFT_LENGTH = timedelta(hours=2, minutes=45)
 
 FOODCOOP_USERNAME = os.getenv("FOODCOOP_USERNAME")
 FOODCOOP_PASSWORD = os.getenv("FOODCOOP_PASSWORD")
@@ -14,8 +28,9 @@ FOODCOOP_PASSWORD_INPUT = "Password"
 FOODCOOP_LOGIN_BUTTON = "Log In"
 FOODCOOP_NEXT_WEEK_BUTTON = "Next Week →"
 
-FOODCOOP_LOGIN_URL = "https://members.foodcoop.com/services/login/"
-FOODCOOP_SHIFT_CALENDAR_URL = "https://members.foodcoop.com/services/shifts/"
+FOODCOOP_URL = "https://members.foodcoop.com"
+FOODCOOP_LOGIN_URL = f"{FOODCOOP_URL}/services/login/"
+FOODCOOP_SHIFT_CALENDAR_URL = f"{FOODCOOP_URL}/services/shifts/"
 
 
 def authenticate_into_foodcoop(page: Page):
@@ -51,16 +66,17 @@ def parse_shifts_from_calendar_date_locator(
     for shift in shift_day.locator("a.shift").all():
         url = shift.get_attribute("href")
         assert url, "Shift url is missing"
+        url = f"{FOODCOOP_URL}{url.strip()}"
 
         start_time = shift.locator("b").inner_text()
-        _, label = shift.inner_text().strip().split(maxsplit=1)
+        _, label = shift.inner_text().strip().lstrip("🥕").split(maxsplit=1)
 
         key = FoodCoopShiftKey(
             start_time=datetime.strptime(f"{date} {start_time}", "%m/%d/%Y %I:%M%p"),
             label=label,
         )
 
-        shifts_for_key.setdefault(key, FoodCoopShift(key=key)).urls.append(url.strip())
+        shifts_for_key.setdefault(key, FoodCoopShift(key=key)).urls.append(url)
 
     return shifts_for_key.values()
 
@@ -83,6 +99,39 @@ def parse_shifts_from_calendar_page(page: Page) -> list[FoodCoopShift]:
     return list(shifts)
 
 
+def sync_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
+    foodcoop_shift_calendar = GoogleCalendar(
+        default_calendar=GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID,
+        credentials=service_account.Credentials.from_service_account_file(
+            GOOGLE_SERVICE_ACCOUNT_JSON_PATH,
+            scopes=["https://www.googleapis.com/auth/calendar"],
+        ),  # type: ignore
+    )
+
+    # Delete existing shifts on calendar before syncing
+    for event in foodcoop_shift_calendar.get_events():
+        foodcoop_shift_calendar.delete_event(event)
+
+    # Sync shifts to calendar
+    for shift in shifts:
+        foodcoop_shift_calendar.add_event(
+            event=Event(
+                summary=shift.key.label,
+                start=shift.key.start_time,
+                end=shift.key.start_time + FOODCOOP_SHIFT_LENGTH,
+                description="\n".join(
+                    [
+                        f"{len(shift.urls)} shift(s) available for {shift.key.label}:",
+                        "<ul>",
+                        *(f"<li>{url}</li>" for url in shift.urls),
+                        "</ul>",
+                    ]
+                ),
+                location=GOOGLE_FOODCOOP_LOCATION,
+            )
+        )
+
+
 def main():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -92,9 +141,11 @@ def main():
 
         page.goto(FOODCOOP_SHIFT_CALENDAR_URL)
 
-        _shifts = parse_shifts_from_calendar_page(page)
+        shifts = parse_shifts_from_calendar_page(page)
 
         browser.close()
+
+    sync_shifts_to_google_calendar(shifts)
 
 
 if __name__ == "__main__":
