@@ -7,7 +7,7 @@ from typing import Iterable
 from gcsa.event import Event
 from gcsa.google_calendar import GoogleCalendar
 from google.oauth2 import service_account
-from playwright.async_api import Locator, Page, async_playwright
+from playwright.async_api import BrowserContext, Locator, async_playwright
 from pydantic import BaseModel, ConfigDict, Field
 
 GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID = "9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462@group.calendar.google.com"
@@ -19,6 +19,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON_PATH = (
 )
 
 FOODCOOP_SHIFT_LENGTH = timedelta(hours=2, minutes=45)
+FOODCOOP_NUM_CALENDAR_SHIFT_PAGES = 6
 
 FOODCOOP_USERNAME = os.getenv("FOODCOOP_USERNAME")
 FOODCOOP_PASSWORD = os.getenv("FOODCOOP_PASSWORD")
@@ -33,9 +34,11 @@ FOODCOOP_LOGIN_URL = f"{FOODCOOP_URL}/services/login/"
 FOODCOOP_SHIFT_CALENDAR_URL = f"{FOODCOOP_URL}/services/shifts/"
 
 
-async def authenticate_into_foodcoop(page: Page):
+async def authenticate_into_foodcoop(browser_context: BrowserContext):
     assert FOODCOOP_USERNAME, "FOODCOOP_USERNAME is not set"
     assert FOODCOOP_PASSWORD, "FOODCOOP_PASSWORD is not set"
+
+    page = await browser_context.new_page()
 
     await page.goto(FOODCOOP_LOGIN_URL)
 
@@ -58,6 +61,15 @@ class FoodCoopShiftKey(BaseModel):
 class FoodCoopShift(BaseModel):
     key: FoodCoopShiftKey
     urls: list[str] = Field(default_factory=list)
+
+
+def get_calendar_page_urls():
+    today = datetime.now()
+
+    return [
+        f"{FOODCOOP_SHIFT_CALENDAR_URL}{shift_page}/0/0/{today.strftime('%Y-%m-%d')}/"
+        for shift_page in range(FOODCOOP_NUM_CALENDAR_SHIFT_PAGES)
+    ]
 
 
 async def parse_shifts_from_calendar_date_locator(
@@ -85,19 +97,40 @@ async def parse_shifts_from_calendar_date_locator(
     return shifts_for_key.values()
 
 
-async def parse_shifts_from_calendar_page(page: Page) -> list[FoodCoopShift]:
-    shift_day_locators = await page.locator(".grid-container div.col").all()
+async def parse_shifts_from_calendar_page(
+    browser_context: BrowserContext,
+    url: str,
+) -> list[FoodCoopShift]:
+    page = await browser_context.new_page()
+    await page.goto(url)
 
     shifts = []
-    for shift_day in shift_day_locators:
-        shifts.extend(await parse_shifts_from_calendar_date_locator(shift_day))
+    async for task in asyncio.as_completed(
+        [
+            parse_shifts_from_calendar_date_locator(shift_day_locator)
+            for shift_day_locator in (
+                await page.locator(".grid-container div.col").all()
+            )
+        ]
+    ):
+        shifts.extend(await task)
 
-    next_week_locator = page.get_by_role("link", name="Next Week →").first
-    if await next_week_locator.is_visible():
-        async with page.expect_navigation():
-            await next_week_locator.click()
+    return shifts
 
-        shifts.extend(await parse_shifts_from_calendar_page(page))
+
+async def parse_shifts_from_calendar(
+    browser_context: BrowserContext,
+) -> list[FoodCoopShift]:
+    shift_calendar_urls = get_calendar_page_urls()
+    shifts = []
+
+    async for task in asyncio.as_completed(
+        [
+            parse_shifts_from_calendar_page(browser_context, url)
+            for url in shift_calendar_urls
+        ]
+    ):
+        shifts.extend(await task)
 
     return shifts
 
@@ -138,13 +171,11 @@ def sync_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
 async def main():
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+        browser_context = await browser.new_context()
 
-        await authenticate_into_foodcoop(page)
+        await authenticate_into_foodcoop(browser_context)
 
-        await page.goto(FOODCOOP_SHIFT_CALENDAR_URL)
-
-        shifts = await parse_shifts_from_calendar_page(page)
+        shifts = await parse_shifts_from_calendar(browser_context)
 
         await browser.close()
 
