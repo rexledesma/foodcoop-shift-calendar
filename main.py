@@ -85,7 +85,7 @@ def parse_shifts_from_calendar_page(page: Page) -> list[FoodCoopShift]:
 
 def main():
     with sync_playwright() as p:
-        browser = p.chromium.launch()
+        browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
         authenticate_into_foodcoop(page)
