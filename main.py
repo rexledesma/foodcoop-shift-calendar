@@ -109,6 +109,10 @@ async def parse_shifts_from_calendar_date_locator(
 
         start_time = await shift.locator("b").inner_text()
         _, label = (await shift.inner_text()).strip().lstrip("🥕").split(maxsplit=1)
+        shift_name, emoji = label.rsplit(maxsplit=1)
+
+        # Put the emoji in front of the label for easier visual parsing on the calendar
+        label = f"{emoji} {shift_name}"
 
         start_time = datetime.strptime(f"{date} {start_time}", "%m/%d/%Y %I:%M%p")
         start_time = start_time.replace(tzinfo=ZoneInfo("US/Eastern"))
