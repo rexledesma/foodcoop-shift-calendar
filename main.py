@@ -21,7 +21,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON_PATH = (
 )
 
 FOODCOOP_SHIFT_LENGTH = timedelta(hours=2, minutes=45)
-FOODCOOP_NUM_SHIFT_CALENDAR_PAGES = 6
+FOODCOOP_NUM_SHIFT_CALENDAR_PAGES = 3
 
 FOODCOOP_USERNAME = os.getenv("FOODCOOP_USERNAME")
 FOODCOOP_PASSWORD = os.getenv("FOODCOOP_PASSWORD")
@@ -29,7 +29,6 @@ FOODCOOP_PASSWORD = os.getenv("FOODCOOP_PASSWORD")
 FOODCOOP_USERNAME_INPUT = "Member Number or Email"
 FOODCOOP_PASSWORD_INPUT = "Password"
 FOODCOOP_LOGIN_BUTTON = "Log In"
-FOODCOOP_NEXT_WEEK_BUTTON = "Next Week →"
 
 FOODCOOP_URL = "https://members.foodcoop.com"
 FOODCOOP_LOGIN_URL = f"{FOODCOOP_URL}/services/login/"
@@ -61,6 +60,8 @@ class FoodCoopShiftKey(BaseModel):
 
 
 class FoodCoopShift(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     key: FoodCoopShiftKey
     urls: frozenset[str]
 
@@ -157,7 +158,7 @@ async def parse_shifts_from_calendar(
     async for task in asyncio.as_completed(
         [
             parse_shifts_from_calendar_page(browser_context, url)
-            for url in get_calendar_page_urls(num_pages=3)
+            for url in get_calendar_page_urls()
         ]
     ):
         shifts.extend(await task)
@@ -189,7 +190,9 @@ def reconcile_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
         default_calendar=GOOGLE_FOODCOOP_SHIFT_CALENDAR_ID,
         credentials=service_account.Credentials.from_service_account_file(
             GOOGLE_SERVICE_ACCOUNT_JSON_PATH,
-            scopes=["https://www.googleapis.com/auth/calendar"],
+            scopes=[
+                "https://www.googleapis.com/auth/calendar",
+            ],
         ),  # type: ignore
     )
 
