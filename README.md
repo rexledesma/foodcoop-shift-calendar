@@ -16,6 +16,15 @@ This works by scraping the PSFC Shift Calendar every 5 minutes, reconciling with
 1. Navigate to the [Google Calendar](https://calendar.google.com/calendar/u/0/embed?src=9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462@group.calendar.google.com).
 2. On web, click "Add to Google Calendar". On mobile, click the plus icon.
 
+### Add to Microsoft Outlook Calendar
+
+1. Copy the Calendar URL below.
+
+```
+https://calendar.google.com/calendar/ical/9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462%40group.calendar.google.com/public/basic.ics
+```
+
+2. Use the URL in the instructions to ["subscribe to a calendar"](https://support.microsoft.com/en-us/office/import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web-cff1429c-5af6-41ec-a5b4-74f2c278e98c) on Outlook.
 
 ## Highlights
 
