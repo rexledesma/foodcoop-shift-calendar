@@ -9,6 +9,14 @@ The calendar is available in the following formats:
 
 This works by scraping the PSFC Shift Calendar every 5 minutes, reconciling with a public calendar.
 
+## Getting Started
+
+### Add to Google Calendar
+
+1. Navigate to the [Google Calendar](https://calendar.google.com/calendar/u/0/embed?src=9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462@group.calendar.google.com).
+2. On web, click "Add to Google Calendar". On mobile, click the plus icon.
+
+
 ## Highlights
 
 ### Search: search by shift name
