@@ -26,6 +26,16 @@ https://calendar.google.com/calendar/ical/9b8f99f4caf33d2afbd17ac5f64a5113c7e373
 
 2. Use the URL in the instructions to ["subscribe to a calendar"](https://support.microsoft.com/en-us/office/import-or-subscribe-to-a-calendar-in-outlook-com-or-outlook-on-the-web-cff1429c-5af6-41ec-a5b4-74f2c278e98c) on Outlook.
 
+### Add to Apple Calendar
+
+1. Copy the Calendar URL below.
+
+```
+https://calendar.google.com/calendar/ical/9b8f99f4caf33d2afbd17ac5f64a5113c7e373686247a7126b6a0b96a8cbd462%40group.calendar.google.com/public/basic.ics
+```
+
+2. Use the URL in the instructions to ["setup a new iCloud calendar subscription"](https://support.apple.com/en-us/102301) on Calendar.
+
 ## Highlights
 
 ### Search: search by shift name
