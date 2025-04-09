@@ -232,7 +232,7 @@ def reconcile_shifts_to_google_calendar(shifts: list[FoodCoopShift]):
 
     # Update shifts that have changed
     shifts_to_update = [
-        (shift, event)
+        (parsed_shifts_for_key[shift.key], event)
         for (shift, event) in existing_shifts_for_key.values()
         if shift.key in parsed_shifts_for_key
         and shift.urls != parsed_shifts_for_key[shift.key].urls
