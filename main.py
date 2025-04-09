@@ -41,7 +41,7 @@ async def authenticate_into_foodcoop(browser_context: BrowserContext):
 
     page = await browser_context.new_page()
 
-    await page.goto(FOODCOOP_LOGIN_URL)
+    await page.goto(FOODCOOP_LOGIN_URL, wait_until="domcontentloaded")
 
     await page.get_by_role("textbox", name=FOODCOOP_USERNAME_INPUT).fill(
         FOODCOOP_USERNAME
@@ -135,7 +135,7 @@ async def parse_shifts_from_calendar_page(
     url: str,
 ) -> list[FoodCoopShift]:
     page = await browser_context.new_page()
-    await page.goto(url)
+    await page.goto(url, wait_until="domcontentloaded")
 
     shifts = []
     for task in asyncio.as_completed(
