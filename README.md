@@ -3,9 +3,7 @@
 Instead of searching the Park Slope Food Coop (PSFC) [📅 Shift Calendar](https://members.foodcoop.com/services/shifts/) to sign up for a shift, you can now just search in your favorite calendar app. As featured on the [`@foodcoop` Instagram](https://www.instagram.com/stories/highlights/18038560394618051/)!
 
 <div align="center">
-
-![PSFC Shift Calendar for Google Calendar](assets/demo.gif)
-
+  <img alt="searching the PSFC shift calendar on a calendar app" src="https://raw.githubusercontent.com/rexledesma/foodcoop-shift-calendar/main/assets/demo.gif" width="250">
 </div>
 
 The calendar is available in the following formats:
