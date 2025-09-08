@@ -31,8 +31,9 @@ FOODCOOP_PASSWORD_INPUT = "Password"
 FOODCOOP_LOGIN_BUTTON = "Log In"
 
 FOODCOOP_URL = "https://members.foodcoop.com"
-FOODCOOP_LOGIN_URL = f"{FOODCOOP_URL}/services/login/"
-FOODCOOP_SHIFT_CALENDAR_URL = f"{FOODCOOP_URL}/services/shifts/"
+FOODCOOP_LOGIN_URL = f"{FOODCOOP_URL}/services/login"
+FOODCOOP_HOME_URL = f"{FOODCOOP_URL}/services/home"
+FOODCOOP_SHIFT_CALENDAR_URL = f"{FOODCOOP_URL}/services/shifts"
 
 
 async def authenticate_into_foodcoop(browser_context: BrowserContext):
@@ -50,6 +51,11 @@ async def authenticate_into_foodcoop(browser_context: BrowserContext):
         FOODCOOP_PASSWORD
     )
     await page.get_by_role("button", name=FOODCOOP_LOGIN_BUTTON).click()
+
+    if not page.url.startswith(FOODCOOP_HOME_URL):
+        raise Exception(
+            f"Authentication failed. Expected to be redirected to {FOODCOOP_HOME_URL} but was at {page.url}."
+        )
 
 
 class FoodCoopShiftKey(BaseModel):
@@ -91,7 +97,7 @@ def get_calendar_page_urls(
     today = datetime.now()
 
     return [
-        f"{FOODCOOP_SHIFT_CALENDAR_URL}{shift_page}/0/0/{today.strftime('%Y-%m-%d')}/"
+        f"{FOODCOOP_SHIFT_CALENDAR_URL}/{shift_page}/0/0/{today.strftime('%Y-%m-%d')}/"
         for shift_page in range(num_pages)
     ]
 
